@@ -53,6 +53,8 @@
 #include "BLT_translation.h"
 
 #include "transform.hh"
+
+#include "RNA_prototypes.h"
 #include "transform_constraints.hh"
 #include "transform_convert.hh"
 #include "transform_draw_cursors.hh"

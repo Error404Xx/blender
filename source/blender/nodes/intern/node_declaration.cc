@@ -20,7 +20,7 @@ static void reset_declaration(NodeDeclaration &declaration)
   std::destroy_at(&declaration);
   new (&declaration) NodeDeclaration();
 }
-
+//定义节点
 void build_node_declaration(const bNodeType &typeinfo,
                             NodeDeclaration &r_declaration,
                             const bNodeTree *ntree,

@@ -668,6 +668,7 @@ void MESH_OT_primitive_uv_sphere_add(wmOperatorType *ot)
   ED_object_add_generic_props(ot, true);
 }
 
+//创建球型的具体方法
 static int add_primitive_icosphere_exec(bContext *C, wmOperator *op)
 {
   MakePrimitiveData creation_data;
@@ -677,7 +678,7 @@ static int add_primitive_icosphere_exec(bContext *C, wmOperator *op)
   bool enter_editmode;
   ushort local_view_bits;
   const bool calc_uvs = RNA_boolean_get(op->ptr, "calc_uvs");
-
+  
   WM_operator_view3d_unit_defaults(C, op);
   ED_object_add_generic_get_opts(
       C, op, 'Z', loc, rot, scale, &enter_editmode, &local_view_bits, nullptr);
@@ -689,11 +690,11 @@ static int add_primitive_icosphere_exec(bContext *C, wmOperator *op)
                           local_view_bits,
                           &creation_data);
   em = BKE_editmesh_from_object(obedit);
-
+  
   if (calc_uvs) {
     ED_mesh_uv_ensure(static_cast<Mesh *>(obedit->data), nullptr);
   }
-
+  
   if (!EDBM_op_call_and_selectf(
           em,
           op,
@@ -707,7 +708,7 @@ static int add_primitive_icosphere_exec(bContext *C, wmOperator *op)
   {
     return OPERATOR_CANCELLED;
   }
-
+  
   make_prim_finish(C, obedit, &creation_data, enter_editmode);
 
   return OPERATOR_FINISHED;
@@ -719,17 +720,17 @@ void MESH_OT_primitive_ico_sphere_add(wmOperatorType *ot)
   ot->name = "Add Ico Sphere";
   ot->description = "Construct an Icosphere mesh";
   ot->idname = "MESH_OT_primitive_ico_sphere_add";
-
+  
   /* api callbacks */
-  ot->exec = add_primitive_icosphere_exec;
+  ot->exec = add_primitive_icosphere_exec;//创建球型的回调方法
   ot->poll = ED_operator_scene_editable;
-
+  
   /* flags */
   ot->flag = OPTYPE_REGISTER | OPTYPE_UNDO;
-
+  
   /* props */
   RNA_def_int(ot->srna, "subdivisions", 2, 1, 10, "Subdivisions", "", 1, 8);
-
+  
   ED_object_add_unit_props_radius(ot);
   ED_object_add_mesh_props(ot);
   ED_object_add_generic_props(ot, true);

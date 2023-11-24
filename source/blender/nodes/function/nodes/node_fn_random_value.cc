@@ -15,7 +15,7 @@
 namespace blender::nodes::node_fn_random_value_cc {
 
 NODE_STORAGE_FUNCS(NodeRandomValue)
-
+//节点定义
 static void node_declare(NodeDeclarationBuilder &b)
 {
   b.add_input<decl::Vector>("Min").supports_field();

@@ -55,7 +55,7 @@ WorkSpace *ED_workspace_add(Main *bmain, const char *name)
 {
   return BKE_workspace_add(bmain, name);
 }
-
+//工作区
 static void workspace_exit(WorkSpace *workspace, wmWindow *win)
 {
   /* Scene pinning: Store whatever scene was active when leaving the workspace. It's reactivated

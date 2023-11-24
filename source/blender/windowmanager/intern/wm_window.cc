@@ -423,7 +423,7 @@ void wm_quit_with_optional_confirmation_prompt(bContext *C, wmWindow *win)
 /* -------------------------------------------------------------------- */
 /** \name Window Close
  * \{ */
-
+//窗口关闭
 void wm_window_close(bContext *C, wmWindowManager *wm, wmWindow *win)
 {
   wmWindow *win_other;

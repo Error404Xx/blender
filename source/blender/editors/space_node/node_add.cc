@@ -1000,7 +1000,7 @@ static const EnumPropertyItem *new_node_tree_type_itemf(bContext * /*C*/,
 {
   return rna_node_tree_type_itemf(nullptr, nullptr, r_free);
 }
-
+//初始化节点树?
 void NODE_OT_new_node_tree(wmOperatorType *ot)
 {
   PropertyRNA *prop;

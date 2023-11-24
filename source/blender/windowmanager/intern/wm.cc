@@ -597,7 +597,7 @@ void wm_close_and_free(bContext *C, wmWindowManager *wm)
     CTX_wm_manager_set(C, nullptr);
   }
 }
-
+//Window Manager不断发送消息
 void WM_main(bContext *C)
 {
   /* Single refresh before handling events.

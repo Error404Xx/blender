@@ -78,7 +78,7 @@ static void clear_picking_highlight(ListBase *links)
 /* -------------------------------------------------------------------- */
 /** \name Add Node
  * \{ */
-
+//拖拽出引线
 static bNodeLink create_drag_link(bNode &node, bNodeSocket &socket)
 {
   bNodeLink oplink{};

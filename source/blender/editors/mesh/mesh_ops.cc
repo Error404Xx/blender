@@ -51,8 +51,8 @@ void ED_operatortypes_mesh()
   WM_operatortype_append(MESH_OT_primitive_grid_add);
   WM_operatortype_append(MESH_OT_primitive_monkey_add);
   WM_operatortype_append(MESH_OT_primitive_uv_sphere_add);
-  WM_operatortype_append(MESH_OT_primitive_ico_sphere_add);
-
+  WM_operatortype_append(MESH_OT_primitive_ico_sphere_add);//创建球形
+  
   WM_operatortype_append(MESH_OT_primitive_cube_add_gizmo);
 
   WM_operatortype_append(MESH_OT_attribute_set);

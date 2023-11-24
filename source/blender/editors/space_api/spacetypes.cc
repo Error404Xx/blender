@@ -97,7 +97,7 @@ void ED_spacetypes_init()
   ED_operatortypes_grease_pencil();
   ED_operatortypes_object();
   ED_operatortypes_lattice();
-  ED_operatortypes_mesh();
+  ED_operatortypes_mesh();//注册mesh操作
   ED_operatortypes_geometry();
   ED_operatortypes_sculpt();
   ED_operatortypes_sculpt_curves();

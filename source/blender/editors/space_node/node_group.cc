@@ -267,6 +267,7 @@ static void update_nested_node_refs_after_ungroup(bNodeTree &ntree,
 
 /**
  * \return True if successful.
+ * 解散组
  */
 static bool node_group_ungroup(Main *bmain, bNodeTree *ntree, bNode *gnode)
 {

@@ -4047,6 +4047,13 @@ static bool realtime_compositor_is_in_use(const bContext &context)
   return false;
 }
 
+/**
+ * \绘制节点树
+ * \param C 
+ * \param region 
+ * \param ntree 
+ * \param parent_key 
+ */
 static void draw_nodetree(const bContext &C,
                           ARegion &region,
                           bNodeTree &ntree,
@@ -4191,6 +4198,7 @@ void node_draw_space(const bContext &C, ARegion &region)
         GPU_matrix_projection_set(original_proj);
       }
 
+      //绘制节点树
       draw_nodetree(C, region, *ntree, path->parent_key);
     }
 

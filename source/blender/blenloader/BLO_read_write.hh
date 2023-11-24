@@ -86,8 +86,10 @@ int BLO_get_struct_id_by_name(BlendWriter *writer, const char *struct_name);
  */
 void BLO_write_struct_by_name(BlendWriter *writer, const char *struct_name, const void *data_ptr);
 void BLO_write_struct_by_id(BlendWriter *writer, int struct_id, const void *data_ptr);
+
+// "\"斜杠表示换行
 #define BLO_write_struct(writer, struct_name, data_ptr) \
-  BLO_write_struct_by_id(writer, BLO_get_struct_id(writer, struct_name), data_ptr)
+ BLO_write_struct_by_id(writer, BLO_get_struct_id(writer, struct_name), data_ptr)
 
 /**
  * Write single struct at address.

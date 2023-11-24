@@ -682,6 +682,7 @@ void snode_set_context(const bContext &C)
 
 }  // namespace blender::ed::space_node
 
+//节点上的显示隐藏小箭头
 void ED_node_set_active(
     Main *bmain, SpaceNode *snode, bNodeTree *ntree, bNode *node, bool *r_active_texture_changed)
 {
