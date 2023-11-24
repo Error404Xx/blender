@@ -28,7 +28,7 @@
 
 #include "BKE_anim_data.h"
 #include "BKE_curves.hh"
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_geometry_fields.hh"
 #include "BKE_geometry_set.hh"
 #include "BKE_global.h"
@@ -37,8 +37,9 @@
 #include "BKE_lib_query.h"
 #include "BKE_lib_remap.h"
 #include "BKE_main.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 
 #include "BLT_translation.h"
 
@@ -140,7 +141,7 @@ IDTypeInfo IDType_ID_CV = {
     /*main_listbase_index*/ INDEX_ID_CV,
     /*struct_size*/ sizeof(Curves),
     /*name*/ "Curves",
-    /*name_plural*/ N_("hair curves"),
+    /*name_plural*/ N_("hair_curves"),
     /*translation_context*/ BLT_I18NCONTEXT_ID_CURVES,
     /*flags*/ IDTYPE_FLAGS_APPEND_IS_REUSABLE,
     /*asset_type_info*/ nullptr,
@@ -264,7 +265,7 @@ void BKE_curves_data_update(Depsgraph *depsgraph, Scene *scene, Object *object)
   else {
     BKE_object_eval_assign_data(object, &curves_eval->id, false);
   }
-  object->runtime.geometry_set_eval = new GeometrySet(std::move(geometry_set));
+  object->runtime->geometry_set_eval = new GeometrySet(std::move(geometry_set));
 }
 
 /* Draw Cache */

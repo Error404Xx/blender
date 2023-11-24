@@ -262,12 +262,12 @@ bool BLI_file_magic_is_gzip(const char header[4])
 
 bool BLI_file_magic_is_zstd(const char header[4])
 {
-  /* ZSTD files consist of concatenated frames, each either a Zstd frame or a skippable frame.
-   * Both types of frames start with a magic number: 0xFD2FB528 for Zstd frames and 0x184D2A5*
+  /* ZSTD files consist of concatenated frames, each either a ZSTD frame or a skippable frame.
+   * Both types of frames start with a magic number: `0xFD2FB528` for ZSTD frames and `0x184D2A5`
    * for skippable frames, with the * being anything from 0 to F.
    *
-   * To check whether a file is Zstd-compressed, we just check whether the first frame matches
-   * either. Seeking through the file until a Zstd frame is found would make things more
+   * To check whether a file is ZSTD-compressed, we just check whether the first frame matches
+   * either. Seeking through the file until a ZSTD frame is found would make things more
    * complicated and the probability of a false positive is rather low anyways.
    *
    * Note that LZ4 uses a compatible format, so even though its compressed frames have a
@@ -862,9 +862,9 @@ static int recursive_operation(const char *startfrom,
                                RecursiveOp_Callback callback_dir_post)
 {
   struct stat st;
-  char *from = NULL, *to = nullptr;
-  char *from_path = NULL, *to_path = nullptr;
-  struct dirent **dirlist = nullptr;
+  char *from = nullptr, *to = nullptr;
+  char *from_path = nullptr, *to_path = nullptr;
+  dirent **dirlist = nullptr;
   size_t from_alloc_len = -1, to_alloc_len = -1;
   int i, n = 0, ret = 0;
 
@@ -916,7 +916,7 @@ static int recursive_operation(const char *startfrom,
     }
 
     for (i = 0; i < n; i++) {
-      const struct dirent *const dirent = dirlist[i];
+      const dirent *const dirent = dirlist[i];
 
       if (FILENAME_IS_CURRPAR(dirent->d_name)) {
         continue;
@@ -1062,8 +1062,8 @@ static int delete_soft(const char *file, const char **error_message)
   char *xdg_current_desktop = getenv("XDG_CURRENT_DESKTOP");
   char *xdg_session_desktop = getenv("XDG_SESSION_DESKTOP");
 
-  if ((xdg_current_desktop != NULL && STREQ(xdg_current_desktop, "KDE")) ||
-      (xdg_session_desktop != NULL && STREQ(xdg_session_desktop, "KDE")))
+  if ((xdg_current_desktop != nullptr && STREQ(xdg_current_desktop, "KDE")) ||
+      (xdg_session_desktop != nullptr && STREQ(xdg_session_desktop, "KDE")))
   {
     args[0] = "kioclient5";
     args[1] = "move";

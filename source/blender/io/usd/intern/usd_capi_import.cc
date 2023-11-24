@@ -13,7 +13,7 @@
 #include "BKE_blender_version.h"
 #include "BKE_cachefile.h"
 #include "BKE_cdderivedmesh.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
@@ -222,6 +222,7 @@ static void import_startjob(void *customdata, wmJobWorkerStatus *worker_status)
 
     WM_main_add_notifier(NC_SCENE | ND_LAYER, nullptr);
 
+    BKE_view_layer_synced_ensure(data->scene, data->view_layer);
     data->view_layer->active_collection = BKE_layer_collection_first_from_scene_collection(
         data->view_layer, import_collection);
   }
@@ -607,15 +608,14 @@ CacheReader *CacheReader_open_usd_object(CacheArchiveHandle *handle,
     return reader;
   }
 
+  if (reader) {
+    USD_CacheReader_free(reader);
+  }
+
   pxr::UsdPrim prim = archive->stage()->GetPrimAtPath(pxr::SdfPath(object_path));
 
   if (!prim) {
-    WM_reportf(RPT_WARNING, "USD Import: unable to open cache reader for object %s", object_path);
     return nullptr;
-  }
-
-  if (reader) {
-    USD_CacheReader_free(reader);
   }
 
   /* TODO(makowalski): The handle does not have the proper import params or settings. */

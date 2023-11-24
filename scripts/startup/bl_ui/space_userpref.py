@@ -576,6 +576,8 @@ class USERPREF_PT_animation_keyframes(AnimationPanel, CenterAlignMixIn, Panel):
         prefs = context.preferences
         edit = prefs.edit
 
+        layout.prop(edit, "key_insert_channels", expand=True)
+
         col = layout.column()
         col.prop(edit, "use_visual_keying")
         col.prop(edit, "use_keyframe_insert_needed", text="Only Insert Needed")
@@ -1076,7 +1078,7 @@ class USERPREF_PT_theme_text_style(ThemePanel, CenterAlignMixIn, Panel):
 
         col = flow.column()
         col.prop(font_style, "points")
-        col.prop(font_style, "character_weight", text="Weight")
+        col.prop(font_style, "character_weight", text="Weight", text_ctxt=i18n_contexts.id_text)
 
         col = flow.column(align=True)
         col.prop(font_style, "shadow_offset_x", text="Shadow Offset X")
@@ -2008,7 +2010,7 @@ class USERPREF_PT_extensions(ExtensionsPanel, Panel):
         row = layout.row()
         row.label(text="The add-on to use extensions is disabled! See:")
         row.operator(
-            "wm.url_open", text="Extension Add-on Repo", icon='URL',
+            "wm.url_open", text="Extension Add-on Repository", icon='URL',
         ).url = "https://projects.blender.org/ideasman42/bl_ext"
 
 

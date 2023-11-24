@@ -146,6 +146,14 @@ set(BROTLI_LIBRARIES
   ${LIBDIR}/brotli/lib/libbrotlidec-static.a
 )
 
+if(WITH_HARFBUZZ)
+  find_package(Harfbuzz)
+endif()
+
+if(WITH_FRIBIDI)
+  find_package(Fribidi)
+endif()
+
 if(WITH_IMAGE_OPENEXR)
   find_package(OpenEXR)
 endif()
@@ -329,6 +337,7 @@ add_bundled_libraries(embree/lib)
 
 if(WITH_OPENIMAGEDENOISE)
   find_package(OpenImageDenoise REQUIRED)
+  add_bundled_libraries(openimagedenoise/lib)
 endif()
 
 if(WITH_TBB)

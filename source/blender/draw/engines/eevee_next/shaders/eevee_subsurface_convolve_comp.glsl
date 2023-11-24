@@ -5,8 +5,8 @@
 /**
  * Process in screen space the diffuse radiance input to mimic subsurface transmission.
  *
- * This implementation follows the technique described in the siggraph presentation:
- * "Efficient screen space subsurface scattering Siggraph 2018"
+ * This implementation follows the technique described in the SIGGRAPH presentation:
+ * "Efficient screen space subsurface scattering SIGGRAPH 2018"
  * by Evgenii Golubev
  *
  * But, instead of having all the precomputed weights for all three color primaries,
@@ -89,6 +89,12 @@ void main(void)
   float homcoord = ProjectionMatrix[2][3] * vP.z + ProjectionMatrix[3][3];
   vec2 sample_scale = vec2(ProjectionMatrix[0][0], ProjectionMatrix[1][1]) *
                       (0.5 * max_radius / homcoord);
+
+  float pixel_footprint = sample_scale.x * textureSize(depth_tx, 0).x;
+  if (pixel_footprint <= 1.0) {
+    /* Early out, avoid divisions by zero. */
+    return;
+  }
 
   /* Avoid too small radii that have float imprecision. */
   vec3 clamped_sss_radius = max(vec3(1e-4), gbuf.diffuse.sss_radius / max_radius) * max_radius;

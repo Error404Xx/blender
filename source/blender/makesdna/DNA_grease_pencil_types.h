@@ -501,6 +501,8 @@ typedef struct GreasePencil {
   /* Search functions. */
   const blender::bke::greasepencil::TreeNode *find_node_by_name(blender::StringRefNull name) const;
   blender::bke::greasepencil::TreeNode *find_node_by_name(blender::StringRefNull name);
+  blender::IndexMask layer_selection_by_name(const blender::StringRefNull name,
+                                             blender::IndexMaskMemory &memory) const;
 
   void rename_node(blender::bke::greasepencil::TreeNode &node, blender::StringRefNull new_name);
 
@@ -574,20 +576,6 @@ typedef struct GreasePencil {
    */
   blender::bke::greasepencil::Drawing *get_editable_drawing_at(
       const blender::bke::greasepencil::Layer *layer, int frame_number);
-
-  void foreach_visible_drawing(
-      const int frame,
-      blender::FunctionRef<void(const int /*layer_index*/,
-                                blender::bke::greasepencil::Drawing & /*drawing*/)> function);
-  void foreach_visible_drawing(
-      const int frame,
-      blender::FunctionRef<void(const int /*layer_index*/,
-                                const blender::bke::greasepencil::Drawing & /*drawing*/)> function)
-      const;
-  void foreach_editable_drawing(
-      const int frame,
-      blender::FunctionRef<void(const int /*layer_index*/,
-                                blender::bke::greasepencil::Drawing & /*drawing*/)> function);
 
   std::optional<blender::Bounds<blender::float3>> bounds_min_max() const;
 

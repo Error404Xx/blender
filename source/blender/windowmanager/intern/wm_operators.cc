@@ -48,7 +48,7 @@
 #include "BKE_anim_data.h"
 #include "BKE_brush.hh"
 #include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_global.h"
 #include "BKE_idprop.h"
 #include "BKE_image.h"
@@ -827,8 +827,6 @@ static bool operator_last_properties_init_impl(wmOperator *op, IDProperty *last_
   IDPropertyTemplate val = {0};
   IDProperty *replaceprops = IDP_New(IDP_GROUP, &val, "wmOperatorProperties");
 
-  CLOG_INFO(WM_LOG_OPERATORS, 1, "loading previous properties for '%s'", op->type->idname);
-
   PropertyRNA *iterprop = RNA_struct_iterator_property(op->type->srna);
 
   RNA_PROP_BEGIN (op->ptr, itemptr, iterprop) {
@@ -854,6 +852,9 @@ static bool operator_last_properties_init_impl(wmOperator *op, IDProperty *last_
   }
   RNA_PROP_END;
 
+  if (changed) {
+    CLOG_INFO(WM_LOG_OPERATORS, 1, "loading previous properties for '%s'", op->type->idname);
+  }
   IDP_MergeGroup(op->properties, replaceprops, true);
   IDP_FreeProperty(replaceprops);
   return changed;
@@ -882,7 +883,9 @@ bool WM_operator_last_properties_store(wmOperator *op)
   }
 
   if (op->properties) {
-    CLOG_INFO(WM_LOG_OPERATORS, 1, "storing properties for '%s'", op->type->idname);
+    if (!BLI_listbase_is_empty(&op->properties->data.group)) {
+      CLOG_INFO(WM_LOG_OPERATORS, 1, "storing properties for '%s'", op->type->idname);
+    }
     op->type->last_properties = IDP_CopyProperty(op->properties);
   }
 
@@ -1471,8 +1474,8 @@ static uiBlock *wm_block_dialog_create(bContext *C, ARegion *region, void *user_
   UI_block_flag_disable(block, UI_BLOCK_LOOP);
   UI_block_theme_style_set(block, UI_BLOCK_THEME_STYLE_REGULAR);
 
-  /* intentionally don't use 'UI_BLOCK_MOVEMOUSE_QUIT', some dialogues have many items
-   * where quitting by accident is very annoying */
+  /* Intentionally don't use #UI_BLOCK_MOVEMOUSE_QUIT, some dialogs have many items
+   * where quitting by accident is very annoying. */
   UI_block_flag_enable(block, UI_BLOCK_KEEP_OPEN | UI_BLOCK_NUMSELECT);
 
   uiLayout *layout = UI_block_layout(
@@ -1857,8 +1860,6 @@ static int wm_search_menu_invoke(bContext *C, wmOperator *op, const wmEvent *eve
   }
 
   static SearchPopupInit_Data data{};
-  char temp_buffer[256] = "";
-  STRNCPY(temp_buffer, g_search_text);
 
   if (search_type == SEARCH_TYPE_SINGLE_MENU) {
     {
@@ -1872,16 +1873,15 @@ static int wm_search_menu_invoke(bContext *C, wmOperator *op, const wmEvent *eve
       MEM_SAFE_FREE(buffer);
     }
   }
+  else {
+    g_search_text[0] = '\0';
+  }
 
   data.search_type = search_type;
   data.size[0] = UI_searchbox_size_x() * 2;
   data.size[1] = UI_searchbox_size_y();
 
   UI_popup_block_invoke_ex(C, wm_block_search_menu, &data, nullptr, false);
-
-  /* g_search_text contains pressed letter here, copy previous searched
-   * value back to it, this will retain last searched result. see: #112896 */
-  STRNCPY(g_search_text, temp_buffer);
 
   return OPERATOR_INTERFACE;
 }

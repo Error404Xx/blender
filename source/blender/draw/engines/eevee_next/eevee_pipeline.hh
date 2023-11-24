@@ -148,8 +148,6 @@ class ForwardPipeline {
   PassSortable transparent_ps_ = {"Forward.Transparent"};
   float3 camera_forward_;
 
-  // GPUTexture *input_screen_radiance_tx_ = nullptr;
-
  public:
   ForwardPipeline(Instance &inst) : inst_(inst){};
 
@@ -165,10 +163,7 @@ class ForwardPipeline {
                                           ::Material *blender_mat,
                                           GPUMaterial *gpumat);
 
-  void render(View &view,
-              Framebuffer &prepass_fb,
-              Framebuffer &combined_fb,
-              GPUTexture *combined_tx);
+  void render(View &view, Framebuffer &prepass_fb, Framebuffer &combined_fb);
 };
 
 /** \} */
@@ -507,7 +502,7 @@ class UtilityTexture : public Texture {
 
   static constexpr int lut_size = UTIL_TEX_SIZE;
   static constexpr int lut_size_sqr = lut_size * lut_size;
-  static constexpr int layer_count = UTIL_BTDF_LAYER + 1 + UTIL_BTDF_LAYER_COUNT;
+  static constexpr int layer_count = UTIL_BTDF_LAYER + UTIL_BTDF_LAYER_COUNT;
 
  public:
   UtilityTexture()

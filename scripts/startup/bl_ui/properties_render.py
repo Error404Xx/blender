@@ -111,8 +111,8 @@ class RENDER_PT_color_management_display_settings(RenderButtonsPanel, Panel):
         # Only display HDR toggle for non-Filmic display transforms.
         col = layout.column(align=True)
         sub = col.row()
-        sub.active = (not view.view_transform.startswith("Filmic") and
-                      not view.view_transform.startswith("AgX"))
+        sub.active = (not view.view_transform.startswith("Filmic") and not view.view_transform.startswith("AgX") and not
+                      view.view_transform.startswith("False Color"))
         sub.prop(view, "use_hdr_view")
 
 
@@ -193,7 +193,9 @@ class RENDER_PT_eevee_next_horizon_scan(RenderButtonsPanel, Panel):
         props = scene.eevee
 
         col = layout.column()
-        col.prop(props, "gtao_quality", text="Precision")
+        col.prop(props, "horizon_quality", text="Precision")
+        col.prop(props, "horizon_thickness", text="Thickness")
+        col.prop(props, "horizon_bias", text="Bias")
 
 
 class RENDER_PT_eevee_motion_blur(RenderButtonsPanel, Panel):
@@ -593,9 +595,6 @@ class EeveeRaytracingOptionsPanel(RenderButtonsPanel, Panel):
         layout = self.layout
         layout.use_property_split = True
 
-        scene = context.scene
-        eevee = scene.eevee
-
         layout.prop(props, "resolution_scale")
         layout.prop(props, "sample_clamp")
 
@@ -616,6 +615,7 @@ class EeveeRaytracingScreenOption(RenderButtonsPanel, Panel):
 
         layout.prop(props, "screen_trace_quality", text="Precision")
         layout.prop(props, "screen_trace_thickness", text="Thickness")
+        layout.prop(props, "screen_trace_max_roughness", text="Max Roughness")
 
 
 class EeveeRaytracingDenoisePanel(RenderButtonsPanel, Panel):

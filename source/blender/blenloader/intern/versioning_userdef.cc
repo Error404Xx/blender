@@ -129,6 +129,17 @@ static void do_versions_theme(const UserDef *userdef, bTheme *btheme)
     FROM_DEFAULT_V4_UCHAR(space_sequencer.transition);
   }
 
+  if (!USER_VERSION_ATLEAST(400, 35)) {
+    FROM_DEFAULT_V4_UCHAR(tui.wcol_list_item.item);
+  }
+
+  if (!USER_VERSION_ATLEAST(401, 4)) {
+    FROM_DEFAULT_V4_UCHAR(space_view3d.edge_select);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.edge_mode_select);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.face_select);
+    FROM_DEFAULT_V4_UCHAR(space_view3d.face_mode_select);
+  }
+
   /**
    * Versioning code until next subversion bump goes here.
    *
@@ -905,6 +916,9 @@ void blo_do_versions_userdef(UserDef *userdef)
    */
   {
     /* Keep this block, even when empty. */
+    userdef->key_insert_channels = (USER_ANIM_KEY_CHANNEL_LOCATION |
+                                    USER_ANIM_KEY_CHANNEL_ROTATION | USER_ANIM_KEY_CHANNEL_SCALE |
+                                    USER_ANIM_KEY_CHANNEL_CUSTOM_PROPERTIES);
   }
 
   LISTBASE_FOREACH (bTheme *, btheme, &userdef->themes) {

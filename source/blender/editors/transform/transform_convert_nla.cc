@@ -18,7 +18,7 @@
 #include "BLI_math_vector.h"
 
 #include "BKE_anim_data.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_nla.h"
 
 #include "ED_anim_api.hh"
@@ -559,7 +559,7 @@ static void createTransNlaData(bContext *C, TransInfo *t)
         tdn->trackIndex = BLI_findindex(&adt->nla_tracks, nlt);
         tdn->signed_track_index = tdn->trackIndex;
 
-        yval = float(tdn->trackIndex * NLACHANNEL_STEP(snla));
+        yval = float(tdn->trackIndex * NLATRACK_STEP(snla));
 
         tdn->h1[0] = strip->start;
         tdn->h1[1] = yval;
@@ -726,11 +726,14 @@ static void recalcData_nla(TransInfo *t)
       continue;
     }
 
-    delta_y1 = (int(tdn->h1[1]) / NLACHANNEL_STEP(snla) - tdn->signed_track_index);
-    delta_y2 = (int(tdn->h2[1]) / NLACHANNEL_STEP(snla) - tdn->signed_track_index);
+    delta_y1 = (int(tdn->h1[1]) / NLATRACK_STEP(snla) - tdn->signed_track_index);
+    delta_y2 = (int(tdn->h2[1]) / NLATRACK_STEP(snla) - tdn->signed_track_index);
 
     /* Move strip into track in the requested direction. */
-    if (delta_y1 || delta_y2) {
+    /* If we cannot find the strip in the track, this strip has moved tracks already (if multiple
+     * strips using the same action from equal IDs such as meshes or shape-keys are selected)
+     * so can be skipped. */
+    if ((delta_y1 || delta_y2) && BLI_findindex(&tdn->nlt->strips, strip) != -1) {
       int delta = (delta_y2) ? delta_y2 : delta_y1;
 
       AnimData *anim_data = BKE_animdata_from_id(tdn->id);
@@ -956,7 +959,7 @@ static void special_aftertrans_update__nla(bContext *C, TransInfo *t)
   ListBase anim_data = {nullptr, nullptr};
   short filter = (ANIMFILTER_DATA_VISIBLE | ANIMFILTER_FOREDIT | ANIMFILTER_FCURVESONLY);
 
-  /* get channels to work on */
+  /* get tracks to work on */
   ANIM_animdata_filter(
       &ac, &anim_data, eAnimFilter_Flags(filter), ac.data, eAnimCont_Types(ac.datatype));
 

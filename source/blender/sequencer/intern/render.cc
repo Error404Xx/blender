@@ -54,26 +54,26 @@
 #include "RE_engine.h"
 #include "RE_pipeline.h"
 
-#include "SEQ_channels.h"
-#include "SEQ_effects.h"
-#include "SEQ_iterator.h"
-#include "SEQ_modifier.h"
-#include "SEQ_proxy.h"
-#include "SEQ_relations.h"
-#include "SEQ_render.h"
-#include "SEQ_sequencer.h"
-#include "SEQ_time.h"
-#include "SEQ_transform.h"
-#include "SEQ_utils.h"
+#include "SEQ_channels.hh"
+#include "SEQ_effects.hh"
+#include "SEQ_iterator.hh"
+#include "SEQ_modifier.hh"
+#include "SEQ_proxy.hh"
+#include "SEQ_relations.hh"
+#include "SEQ_render.hh"
+#include "SEQ_sequencer.hh"
+#include "SEQ_time.hh"
+#include "SEQ_transform.hh"
+#include "SEQ_utils.hh"
 
-#include "effects.h"
-#include "image_cache.h"
-#include "multiview.h"
-#include "prefetch.h"
-#include "proxy.h"
-#include "render.h"
-#include "strip_time.h"
-#include "utils.h"
+#include "effects.hh"
+#include "image_cache.hh"
+#include "multiview.hh"
+#include "prefetch.hh"
+#include "proxy.hh"
+#include "render.hh"
+#include "strip_time.hh"
+#include "utils.hh"
 
 static ImBuf *seq_render_strip_stack(const SeqRenderData *context,
                                      SeqRenderState *state,
@@ -279,25 +279,22 @@ int seq_get_shown_sequences(const Scene *scene,
                             const int chanshown,
                             Sequence **r_seq_arr)
 {
-  SeqCollection *collection = SEQ_query_rendered_strips(
+  blender::VectorSet strips = SEQ_query_rendered_strips(
       scene, channels, seqbase, timeline_frame, chanshown);
-  const int strip_count = BLI_gset_len(collection->set);
+  const int strip_count = strips.size();
 
   if (UNLIKELY(strip_count > MAXSEQ)) {
-    SEQ_collection_free(collection);
     BLI_assert_msg(0, "Too many strips, this shouldn't happen");
     return 0;
   }
 
   /* Copy collection elements into array. */
   memset(r_seq_arr, 0, sizeof(Sequence *) * (MAXSEQ + 1));
-  Sequence *seq;
   int index = 0;
-  SEQ_ITERATOR_FOREACH (seq, collection) {
+  for (Sequence *seq : strips) {
     r_seq_arr[index] = seq;
     index++;
   }
-  SEQ_collection_free(collection);
 
   /* Sort array by channel. */
   qsort(r_seq_arr, strip_count, sizeof(Sequence *), seq_channel_cmp_fn);
@@ -1433,14 +1430,14 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
    */
 
   const bool is_rendering = G.is_rendering;
-  const bool is_background = G.background;
-  const bool do_seq_gl = is_rendering ? false : (context->scene->r.seq_prev_type) != OB_RENDER;
+  bool do_seq_gl = !context->for_render && (context->scene->r.seq_prev_type) != OB_RENDER &&
+                   BLI_thread_is_main();
+
   bool have_comp = false;
   bool use_gpencil = true;
   /* do we need to re-evaluate the frame after rendering? */
   bool is_frame_update = false;
   Scene *scene;
-  int is_thread_main = BLI_thread_is_main();
 
   /* don't refer to seq->scene above this point!, it can be nullptr */
   if (seq->scene == nullptr) {
@@ -1501,7 +1498,7 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
   is_frame_update = (orig_data.timeline_frame != scene->r.cfra) ||
                     (orig_data.subframe != scene->r.subframe);
 
-  if ((sequencer_view3d_fn && do_seq_gl && camera) && is_thread_main) {
+  if ((sequencer_view3d_fn && do_seq_gl && camera)) {
     char err_out[256] = "unknown";
     int width, height;
     BKE_render_resolution(&scene->r, false, &width, &height);
@@ -1547,36 +1544,39 @@ static ImBuf *seq_render_scene_strip(const SeqRenderData *context,
     const int totviews = BKE_scene_multiview_num_views_get(&scene->r);
     ImBuf **ibufs_arr;
 
-    ibufs_arr = static_cast<ImBuf **>(
-        MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs"));
-
-    /* XXX: this if can be removed when sequence preview rendering uses the job system
+    /*
+     * XXX: this if can be removed when sequence preview rendering uses the job system
      *
-     * disable rendered preview for sequencer while rendering -- it's very much possible
-     * that preview render will went into conflict with final render
+     * Disable rendered preview for sequencer while rendering - invoked render job will
+     * conflict with already running render
      *
      * When rendering from command line renderer is called from main thread, in this
      * case it's always safe to render scene here
      */
-    if (!is_thread_main || is_rendering == false || is_background || context->for_render) {
-      if (re == nullptr) {
-        re = RE_NewSceneRender(scene);
-      }
-
-      const float subframe = frame - floorf(frame);
-
-      RE_RenderFrame(re,
-                     context->bmain,
-                     scene,
-                     have_comp ? nullptr : view_layer,
-                     camera,
-                     floorf(frame),
-                     subframe,
-                     false);
-
-      /* restore previous state after it was toggled on & off by RE_RenderFrame */
-      G.is_rendering = is_rendering;
+    if (!context->for_render && (is_rendering && !G.background)) {
+      goto finally;
     }
+
+    ibufs_arr = static_cast<ImBuf **>(
+        MEM_callocN(sizeof(ImBuf *) * totviews, "Sequence Image Views Imbufs"));
+
+    if (re == nullptr) {
+      re = RE_NewSceneRender(scene);
+    }
+
+    const float subframe = frame - floorf(frame);
+
+    RE_RenderFrame(re,
+                   context->bmain,
+                   scene,
+                   have_comp ? nullptr : view_layer,
+                   camera,
+                   floorf(frame),
+                   subframe,
+                   false);
+
+    /* restore previous state after it was toggled on & off by RE_RenderFrame */
+    G.is_rendering = is_rendering;
 
     for (int view_id = 0; view_id < totviews; view_id++) {
       SeqRenderData localcontext = *context;

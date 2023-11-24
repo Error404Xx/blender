@@ -105,8 +105,7 @@ struct PBVHNode {
   /* Scalar displacements for sculpt mode's layer brush. */
   float *layer_disp = nullptr;
 
-  int proxy_count = 0;
-  PBVHProxyNode *proxies = nullptr;
+  blender::Vector<PBVHProxyNode> proxies;
 
   /* Dyntopo */
 
@@ -154,13 +153,19 @@ struct PBVH {
   /* Mesh data */
   Mesh *mesh;
 
+  /** Local array used when not sculpting base mesh positions directly. */
+  blender::Array<blender::float3> vert_positions_deformed;
+  /** Local array used when not sculpting base mesh positions directly. */
+  blender::Array<blender::float3> vert_normals_deformed;
+  /** Local array used when not sculpting base mesh positions directly. */
+  blender::Array<blender::float3> face_normals_deformed;
+
+  blender::MutableSpan<blender::float3> vert_positions;
   blender::Span<blender::float3> vert_normals;
   blender::Span<blender::float3> face_normals;
-  bool *hide_vert;
-  blender::MutableSpan<blender::float3> vert_positions;
-  /** Local vertex positions owned by the PVBH when not sculpting base mesh positions directly. */
-  blender::Array<blender::float3> vert_positions_deformed;
+
   blender::OffsetIndices<int> faces;
+  bool *hide_vert;
   bool *hide_poly;
   /** Only valid for polygon meshes. */
   blender::Span<int> corner_verts;
@@ -170,10 +175,6 @@ struct PBVH {
   CustomData *vert_data;
   CustomData *loop_data;
   CustomData *face_data;
-
-  int face_sets_color_seed;
-  int face_sets_color_default;
-  int *face_sets;
 
   /* Grid Data */
   CCGKey gridkey;

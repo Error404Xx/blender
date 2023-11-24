@@ -26,7 +26,7 @@
 #include "DNA_screen_types.h"
 #include "DNA_userdef_types.h"
 
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_screen.hh"
 
 #include "RNA_access.hh"
@@ -745,7 +745,7 @@ void UI_panel_header_buttons_end(Panel *panel)
   /* Repurpose the first header button group if it is empty, in case the first button added to
    * the panel doesn't add a new group (if the button is created directly rather than through an
    * interface layout call). */
-  if (block->button_groups.size() > 0) {
+  if (block->button_groups.size() == 1 && button_group.buttons.is_empty()) {
     button_group.flag &= ~UI_BUTTON_GROUP_PANEL_HEADER;
   }
   else {
@@ -2128,6 +2128,11 @@ PanelCategoryDyn *UI_panel_category_find(const ARegion *region, const char *idna
       BLI_findstring(&region->panels_category, idname, offsetof(PanelCategoryDyn, idname)));
 }
 
+int UI_panel_category_index_find(ARegion *region, const char *idname)
+{
+  return BLI_findstringindex(&region->panels_category, idname, offsetof(PanelCategoryDyn, idname));
+}
+
 PanelCategoryStack *UI_panel_category_active_find(ARegion *region, const char *idname)
 {
   return static_cast<PanelCategoryStack *>(BLI_findstring(
@@ -2176,6 +2181,17 @@ static void ui_panel_category_active_set(ARegion *region, const char *idname, bo
 void UI_panel_category_active_set(ARegion *region, const char *idname)
 {
   ui_panel_category_active_set(region, idname, false);
+}
+
+void UI_panel_category_index_active_set(ARegion *region, const int index)
+{
+  PanelCategoryDyn *pc_dyn = static_cast<PanelCategoryDyn *>(
+      BLI_findlink(&region->panels_category, index));
+  if (!pc_dyn) {
+    return;
+  }
+
+  ui_panel_category_active_set(region, pc_dyn->idname, false);
 }
 
 void UI_panel_category_active_set_default(ARegion *region, const char *idname)

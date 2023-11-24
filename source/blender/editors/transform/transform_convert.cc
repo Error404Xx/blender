@@ -21,14 +21,14 @@
 
 #include "BKE_action.h"
 #include "BKE_anim_data.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_fcurve.h"
 #include "BKE_global.h"
 #include "BKE_image.h"
 #include "BKE_layer.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_nla.h"
 #include "BKE_scene.h"
 
@@ -916,7 +916,7 @@ static TransConvertTypeInfo *convert_type_get(const TransInfo *t, Object **r_obj
   if (t->options & CTX_EDGE_DATA) {
     return &TransConvertType_MeshEdge;
   }
-  if (t->options & CTX_GPENCIL_STROKES) {
+  if ((t->options & CTX_GPENCIL_STROKES) && (t->spacetype == SPACE_VIEW3D)) {
     if (t->obedit_type == OB_GREASE_PENCIL) {
       return &TransConvertType_GreasePencil;
     }
@@ -1201,8 +1201,8 @@ void animrecord_check_state(TransInfo *t, ID *id)
    * - we're not only keying for available channels
    * - the option to add new actions for each round is not enabled
    */
-  if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAIL) == 0 &&
-      (scene->toolsettings->autokey_flag & ANIMRECORD_FLAG_WITHNLA))
+  if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAILABLE) == 0 &&
+      (scene->toolsettings->autokey_flag & AUTOKEY_FLAG_LAYERED_RECORD))
   {
     /* if playback has just looped around,
      * we need to add a new NLA track+strip to allow a clean pass to occur */

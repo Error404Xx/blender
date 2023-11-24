@@ -99,7 +99,6 @@ DefNode(ShaderNode,     SH_NODE_TEX_GRADIENT,       def_sh_tex_gradient,    "TEX
 DefNode(ShaderNode,     SH_NODE_TEX_NOISE,          def_sh_tex_noise,       "TEX_NOISE",          TexNoise,         "Noise Texture",     "Generate fractal Perlin noise")
 DefNode(ShaderNode,     SH_NODE_TEX_MAGIC,          def_sh_tex_magic,       "TEX_MAGIC",          TexMagic,         "Magic Texture",     "Generate a psychedelic color texture")
 DefNode(ShaderNode,     SH_NODE_TEX_WAVE,           def_sh_tex_wave,        "TEX_WAVE",           TexWave,          "Wave Texture",      "Generate procedural bands or rings with noise")
-DefNode(ShaderNode,     SH_NODE_TEX_MUSGRAVE,       def_sh_tex_musgrave,    "TEX_MUSGRAVE",       TexMusgrave,      "Musgrave Texture",  "Generate fractal Perlin noise. Allows for greater control over how octaves are combined than the Noise Texture node")
 DefNode(ShaderNode,     SH_NODE_TEX_VORONOI,        def_sh_tex_voronoi,     "TEX_VORONOI",        TexVoronoi,       "Voronoi Texture",   "Generate Worley noise based on the distance to random points. Typically used to generate textures such as stones, water, or biological cells")
 DefNode(ShaderNode,     SH_NODE_TEX_CHECKER,        def_sh_tex_checker,     "TEX_CHECKER",        TexChecker,       "Checker Texture",   "Generate a checkerboard texture")
 DefNode(ShaderNode,     SH_NODE_TEX_BRICK,          def_sh_tex_brick,       "TEX_BRICK",          TexBrick,         "Brick Texture",     "Generate a procedural texture producing bricks")
@@ -335,6 +334,7 @@ DefNode(GeometryNode, GEO_NODE_GEOMETRY_TO_INSTANCE, 0, "GEOMETRY_TO_INSTANCE", 
 DefNode(GeometryNode, GEO_NODE_IMAGE_INFO, 0, "IMAGE_INFO", ImageInfo, "Image Info", "Retrieve information about an image")
 DefNode(GeometryNode, GEO_NODE_IMAGE_TEXTURE, def_geo_image_texture, "IMAGE_TEXTURE", ImageTexture, "Image Texture", "Sample values from an image texture")
 DefNode(GeometryNode, GEO_NODE_INDEX_OF_NEAREST, 0, "INDEX_OF_NEAREST", IndexOfNearest, "Index of Nearest", "Find the nearest element in a group. Similar to the \"Sample Nearest\" node")
+DefNode(GeometryNode, GEO_NODE_INDEX_SWITCH, def_geo_index_switch, "INDEX_SWITCH", IndexSwitch, "Index Switch", "Choose between an arbitrary number of values with an index")
 DefNode(GeometryNode, GEO_NODE_IMAGE, def_geo_image, "IMAGE", InputImage, "Image", "Input image")
 DefNode(GeometryNode, GEO_NODE_INPUT_CURVE_HANDLES, 0, "INPUT_CURVE_HANDLES", InputCurveHandlePositions, "Curve Handle Positions", "Retrieve the position of each Bézier control point's handles")
 DefNode(GeometryNode, GEO_NODE_INPUT_CURVE_TILT, 0, "INPUT_CURVE_TILT", InputCurveTilt, "Curve Tilt", "Retrieve the angle at each control point used to twist the curve's normal around its tangent")
@@ -353,6 +353,7 @@ DefNode(GeometryNode, GEO_NODE_INPUT_MESH_FACE_NEIGHBORS, 0, "MESH_FACE_NEIGHBOR
 DefNode(GeometryNode, GEO_NODE_INPUT_MESH_ISLAND, 0, "MESH_ISLAND", InputMeshIsland, "Mesh Island", "Retrieve information about separate connected regions in a mesh")
 DefNode(GeometryNode, GEO_NODE_INPUT_MESH_VERTEX_NEIGHBORS, 0, "MESH_VERTEX_NEIGHBORS", InputMeshVertexNeighbors, "Vertex Neighbors", "Retrieve topology information relating to each vertex of a mesh")
 DefNode(GeometryNode, GEO_NODE_INPUT_NAMED_ATTRIBUTE, 0, "INPUT_ATTRIBUTE", InputNamedAttribute, "Named Attribute", "Retrieve the data of a specified attribute")
+DefNode(GeometryNode, GEO_NODE_INPUT_NAMED_LAYER_SELECTION, 0, "INPUT_NAMED_LAYER_SELECTION", InputNamedLayerSelection, "Named Layer Selection", "Output a selection of a grease pencil layer");
 DefNode(GeometryNode, GEO_NODE_INPUT_NORMAL, 0, "INPUT_NORMAL", InputNormal, "Normal", "Retrieve a unit length vector indicating the direction pointing away from the geometry at each element")
 DefNode(GeometryNode, GEO_NODE_INPUT_POSITION, 0, "POSITION", InputPosition, "Position", "Retrieve a vector indicating the location of each element")
 DefNode(GeometryNode, GEO_NODE_INPUT_RADIUS, 0, "INPUT_RADIUS", InputRadius, "Radius", "Retrieve the radius at each point on curve or point cloud geometry")

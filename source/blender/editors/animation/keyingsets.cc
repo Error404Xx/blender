@@ -22,7 +22,7 @@
 #include "DNA_scene_types.h"
 
 #include "BKE_animsys.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_main.h"
 #include "BKE_report.h"
 
@@ -699,7 +699,7 @@ KeyingSet *ANIM_get_keyingset_for_autokeying(const Scene *scene, const char *tra
     return ANIM_scene_get_active_keyingset(scene);
   }
 
-  if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAIL)) {
+  if (blender::animrig::is_autokey_flag(scene, AUTOKEY_FLAG_INSERTAVAILABLE)) {
     return ANIM_builtin_keyingset_get_named(ANIM_KS_AVAILABLE_ID);
   }
 
@@ -876,7 +876,7 @@ KeyingSet *ANIM_keyingset_get_from_idname(Scene *scene, const char *idname)
 
 bool ANIM_keyingset_context_ok_poll(bContext *C, KeyingSet *ks)
 {
-  if ((ks->flag & KEYINGSET_ABSOLUTE)) {
+  if (ks->flag & KEYINGSET_ABSOLUTE) {
     return true;
   }
 
@@ -940,7 +940,7 @@ eModifyKey_Returns ANIM_validate_keyingset(bContext *C,
   }
 
   /* if relative Keying Sets, poll and build up the paths */
-  if ((ks->flag & KEYINGSET_ABSOLUTE)) {
+  if (ks->flag & KEYINGSET_ABSOLUTE) {
     return MODIFYKEY_SUCCESS;
   }
 

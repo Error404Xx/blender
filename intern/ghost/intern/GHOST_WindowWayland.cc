@@ -73,6 +73,8 @@ struct WGL_LibDecor_Window {
 
   /** The window has been configured (see #xdg_surface_ack_configure). */
   bool initial_configure_seen = false;
+  /** The window state has been configured. */
+  bool initial_state_seen = false;
 };
 
 static void gwl_libdecor_window_destroy(WGL_LibDecor_Window *decor)
@@ -130,6 +132,14 @@ static void gwl_round_int2_by(int value_p[2], const int round_value)
   value_p[1] = (value_p[1] / round_value) * round_value;
 }
 
+/**
+ * Return true if the value is already rounded by `round_value`.
+ */
+static bool gwl_round_int_test(int value, const int round_value)
+{
+  return value == ((value / round_value) * round_value);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -185,10 +195,6 @@ enum eGWL_PendingWindowActions {
    * The state of the window frame has changed, apply the state from #GWL_Window::frame_pending.
    */
   PENDING_WINDOW_FRAME_CONFIGURE = 0,
-#  ifdef GHOST_OPENGL_ALPHA
-  /** Draw an opaque region behind the window. */
-  PENDING_OPAQUE_SET,
-#  endif
   /**
    * The DPI for a monitor has changed or the monitors (outputs)
    * this window is visible on may have changed. Recalculate the windows scale.
@@ -320,7 +326,7 @@ struct GWL_Window {
    * These pending actions can't be performed when WAYLAND handlers are running from a thread.
    * Postpone their execution until the main thread can handle them.
    */
-  std::atomic<bool> pending_actions[PENDING_NUM];
+  std::atomic<bool> pending_actions[PENDING_NUM] = {false};
 #endif /* USE_EVENT_BACKGROUND_THREAD */
 };
 
@@ -757,11 +763,6 @@ static void gwl_window_pending_actions_handle(GWL_Window *win)
   if (actions[PENDING_WINDOW_FRAME_CONFIGURE]) {
     gwl_window_frame_update_from_pending(win);
   }
-#  ifdef GHOST_OPENGL_ALPHA
-  if (actions[PENDING_OPAQUE_SET]) {
-    win->ghost_window->setOpaque();
-  }
-#  endif
   if (actions[PENDING_OUTPUT_SCALE_UPDATE_DEFERRED]) {
     gwl_window_pending_actions_tag(win, PENDING_OUTPUT_SCALE_UPDATE);
     /* Force postponing scale update to ensure all scale information has been taken into account
@@ -1160,6 +1161,11 @@ static void libdecor_frame_handle_configure(libdecor_frame *frame,
     const int fractional_scale = win->frame.fractional_scale ?
                                      win->frame.fractional_scale :
                                      win->libdecor->scale_fractional_from_output;
+    /* It's important `fractional_scale` has a fractional component or rounding up will fail
+     * to produce the correct whole-number scale. */
+    GHOST_ASSERT((fractional_scale == 0) ||
+                     (gwl_round_int_test(fractional_scale, FRACTIONAL_DENOMINATOR) == false),
+                 "Fractional scale has no fractional component!");
     /* The size from LIBDECOR wont use the GHOST windows buffer size.
      * so it's important to calculate the buffer size that would have been used
      * if fractional scaling wasn't supported. */
@@ -1256,7 +1262,19 @@ static void libdecor_frame_handle_configure(libdecor_frame *frame,
     libdecor_state *state = libdecor_state_new(UNPACK2(size_next));
     libdecor_frame_commit(frame, state, configuration);
     libdecor_state_free(state);
-    decor.initial_configure_seen = true;
+
+    /* Only ever use this once, after initial creation:
+     * #wp_fractional_scale_v1_listener::preferred_scale provides fractional scaling values. */
+    decor.scale_fractional_from_output = 0;
+
+    if (decor.initial_configure_seen == false) {
+      decor.initial_configure_seen = true;
+    }
+    else {
+      if (decor.initial_state_seen == false) {
+        decor.initial_state_seen = true;
+      }
+    }
   }
 }
 
@@ -1568,10 +1586,6 @@ GHOST_WindowWayland::GHOST_WindowWayland(GHOST_SystemWayland *system,
   /* Call top-level callbacks. */
   wl_surface_commit(window_->wl.surface);
 
-#ifdef GHOST_OPENGL_ALPHA
-  setOpaque();
-#endif
-
   /* NOTE: the method used for XDG & LIBDECOR initialization (using `initial_configure_seen`)
    * follows the method used in SDL 3.16. */
 
@@ -1579,7 +1593,9 @@ GHOST_WindowWayland::GHOST_WindowWayland(GHOST_SystemWayland *system,
 #ifdef WITH_GHOST_WAYLAND_LIBDECOR
   if (use_libdecor) {
     WGL_LibDecor_Window &decor = *window_->libdecor;
-    if (fractional_scale_manager) {
+    if (fractional_scale_manager &&
+        (gwl_round_int_test(scale_fractional_from_output, FRACTIONAL_DENOMINATOR) == false))
+    {
       decor.scale_fractional_from_output = scale_fractional_from_output;
     }
 
@@ -1594,7 +1610,21 @@ GHOST_WindowWayland::GHOST_WindowWayland(GHOST_SystemWayland *system,
     }
 
     xdg_toplevel *toplevel = libdecor_frame_get_xdg_toplevel(decor.frame);
-    gwl_window_state_set_for_xdg(toplevel, state, GHOST_kWindowStateNormal);
+    gwl_window_state_set_for_xdg(toplevel, state, gwl_window_state_get(window_));
+
+    /* Needed for maximize to use the size of the maximized frame instead of the size
+     * from `width` & `height`, see #113961 (follow up comments). */
+    int roundtrip_count = 0;
+    while (!decor.initial_state_seen) {
+      /* Use round-trip so as not to block in the case setting
+       * the state is ignored by the compositor. */
+      wl_display_roundtrip(system_->wl_display_get());
+      /* Avoid waiting continuously if the requested state is ignored
+       * (2x round-trips should be enough). */
+      if (++roundtrip_count >= 2) {
+        break;
+      }
+    }
   }
   else
 #endif /* WITH_GHOST_WAYLAND_LIBDECOR */
@@ -1940,19 +1970,6 @@ bool GHOST_WindowWayland::isDialog() const
   return window_->is_dialog;
 }
 
-#ifdef GHOST_OPENGL_ALPHA
-void GHOST_WindowWayland::setOpaque() const
-{
-  struct wl_region *region;
-
-  /* Make the window opaque. */
-  region = wl_compositor_create_region(system_->wl_compositor());
-  wl_region_add(region, 0, 0, UNPACK2(window_->size));
-  wl_surface_set_opaque_region(window_->wl.surface, region);
-  wl_region_destroy(region);
-}
-#endif
-
 GHOST_Context *GHOST_WindowWayland::newDrawingContext(GHOST_TDrawingContextType type)
 {
   switch (type) {
@@ -2139,19 +2156,6 @@ GHOST_TSuccess GHOST_WindowWayland::deactivate()
 
 GHOST_TSuccess GHOST_WindowWayland::notify_size()
 {
-#ifdef GHOST_OPENGL_ALPHA
-#  ifdef USE_EVENT_BACKGROUND_THREAD
-  /* Actual activation is handled when processing pending events. */
-  const bool is_main_thread = system_->main_thread_id == std::this_thread::get_id();
-  if (!is_main_thread) {
-    gwl_window_pending_actions_tag(window_, PENDING_OPAQUE_SET);
-  }
-#  endif
-  {
-    setOpaque();
-  }
-#endif
-
   return system_->pushEvent_maybe_pending(
       new GHOST_Event(system_->getMilliSeconds(), GHOST_kEventWindowSize, this));
 }

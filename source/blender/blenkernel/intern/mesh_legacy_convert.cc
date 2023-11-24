@@ -21,6 +21,7 @@
 #include "BLI_map.hh"
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"
+#include "BLI_math_rotation.h"
 #include "BLI_math_vector_types.hh"
 #include "BLI_memarena.h"
 #include "BLI_multi_value_map.hh"
@@ -31,17 +32,17 @@
 #include "BLI_utildefines.h"
 
 #include "BKE_attribute.hh"
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_global.h"
 #include "BKE_idprop.hh"
 #include "BKE_main.h"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_legacy_convert.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_multires.hh"
 #include "BKE_node.hh"
 #include "BKE_node_runtime.hh"
-#include "BKE_node_tree_update.h"
+#include "BKE_node_tree_update.hh"
 
 #include "BLT_translation.h"
 
@@ -2131,14 +2132,22 @@ void BKE_mesh_legacy_convert_polys_to_offsets(Mesh *mesh)
 static bNodeTree *add_auto_smooth_node_tree(Main &bmain)
 {
   bNodeTree *group = ntreeAddTree(&bmain, DATA_("Auto Smooth"), "GeometryNodeTree");
+  if (!group->geometry_node_asset_traits) {
+    group->geometry_node_asset_traits = MEM_new<GeometryNodeAssetTraits>(__func__);
+  }
+  group->geometry_node_asset_traits->flag |= GEO_NODE_ASSET_MODIFIER;
 
   group->tree_interface.add_socket(DATA_("Geometry"),
                                    "",
                                    "NodeSocketGeometry",
                                    NODE_INTERFACE_SOCKET_INPUT | NODE_INTERFACE_SOCKET_OUTPUT,
                                    nullptr);
-  group->tree_interface.add_socket(
-      DATA_("Angle"), "", "NodeSocketFloatAngle", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+  bNodeTreeInterfaceSocket *angle_io_socket = group->tree_interface.add_socket(
+      DATA_("Angle"), "", "NodeSocketFloat", NODE_INTERFACE_SOCKET_INPUT, nullptr);
+  auto &angle_data = *static_cast<bNodeSocketValueFloat *>(angle_io_socket->socket_data);
+  angle_data.min = 0.0f;
+  angle_data.max = DEG2RADF(180.0f);
+  angle_data.subtype = PROP_ANGLE;
 
   bNode *group_output = nodeAddNode(nullptr, group, "NodeGroupOutput");
   group_output->locx = 480.0f;
@@ -2279,6 +2288,8 @@ void BKE_main_mesh_legacy_convert_auto_smooth(Main &bmain)
         bke::idprop::create(DATA_("Socket_1"), mesh->smoothresh_legacy).release();
     auto *ui_data = reinterpret_cast<IDPropertyUIDataFloat *>(IDP_ui_data_ensure(angle_prop));
     ui_data->base.rna_subtype = PROP_ANGLE;
+    ui_data->soft_min = 0.0f;
+    ui_data->soft_max = DEG2RADF(180.0f);
     IDP_AddToGroup(md->settings.properties, angle_prop);
     IDP_AddToGroup(md->settings.properties,
                    bke::idprop::create(DATA_("Input_1_use_attribute"), 0).release());
@@ -2286,5 +2297,58 @@ void BKE_main_mesh_legacy_convert_auto_smooth(Main &bmain)
                    bke::idprop::create(DATA_("Input_1_attribute_name"), "").release());
   }
 }
+
+namespace blender::bke {
+
+void mesh_sculpt_mask_to_legacy(MutableSpan<CustomDataLayer> vert_layers)
+{
+  bool changed = false;
+  for (CustomDataLayer &layer : vert_layers) {
+    if (StringRef(layer.name) == ".sculpt_mask") {
+      layer.type = CD_PAINT_MASK;
+      layer.name[0] = '\0';
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) {
+    return;
+  }
+  /* #CustomData expects the layers to be sorted in increasing order based on type. */
+  std::stable_sort(
+      vert_layers.begin(),
+      vert_layers.end(),
+      [](const CustomDataLayer &a, const CustomDataLayer &b) { return a.type < b.type; });
+}
+
+void mesh_sculpt_mask_to_generic(Mesh &mesh)
+{
+  if (mesh.attributes().contains(".sculpt_mask")) {
+    return;
+  }
+  void *data = nullptr;
+  const ImplicitSharingInfo *sharing_info = nullptr;
+  for (const int i : IndexRange(mesh.vert_data.totlayer)) {
+    CustomDataLayer &layer = mesh.vert_data.layers[i];
+    if (layer.type == CD_PAINT_MASK) {
+      data = layer.data;
+      sharing_info = layer.sharing_info;
+      layer.data = nullptr;
+      layer.sharing_info = nullptr;
+      CustomData_free_layer(&mesh.vert_data, CD_PAINT_MASK, mesh.totvert, i);
+      break;
+    }
+  }
+  if (data != nullptr) {
+    CustomData_add_layer_named_with_data(
+        &mesh.vert_data, CD_PROP_FLOAT, data, mesh.totvert, ".sculpt_mask", sharing_info);
+  }
+  if (sharing_info != nullptr) {
+    sharing_info->remove_user_and_delete_if_last();
+  }
+}
+
+//
+}  // namespace blender::bke
 
 /** \} */

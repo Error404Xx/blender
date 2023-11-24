@@ -23,6 +23,7 @@
 #include "BLI_math_geom.h"
 #include "BLI_math_matrix.h"
 #include "BLI_set.hh"
+#include "BLI_span.hh"
 #include "BLI_task.h"
 #include "BLI_task.hh"
 #include "BLI_utildefines.h"
@@ -41,17 +42,18 @@
 #include "BKE_brush.hh"
 #include "BKE_ccg.h"
 #include "BKE_colortools.h"
-#include "BKE_context.h"
+#include "BKE_context.hh"
 #include "BKE_image.h"
 #include "BKE_key.h"
 #include "BKE_lib_id.h"
 #include "BKE_main.h"
 #include "BKE_mesh.hh"
 #include "BKE_mesh_mapping.hh"
-#include "BKE_modifier.h"
+#include "BKE_modifier.hh"
 #include "BKE_multires.hh"
 #include "BKE_node_runtime.hh"
 #include "BKE_object.hh"
+#include "BKE_object_types.hh"
 #include "BKE_paint.hh"
 #include "BKE_pbvh_api.hh"
 #include "BKE_report.h"
@@ -117,12 +119,13 @@ SculptMaskWriteInfo SCULPT_mask_get_for_write(SculptSession *ss)
   switch (BKE_pbvh_type(ss->pbvh)) {
     case PBVH_FACES: {
       Mesh *mesh = BKE_pbvh_get_mesh(ss->pbvh);
-      info.layer = static_cast<float *>(
-          CustomData_get_layer_for_write(&mesh->vert_data, CD_PAINT_MASK, mesh->totvert));
+      info.layer = static_cast<float *>(CustomData_get_layer_named_for_write(
+          &mesh->vert_data, CD_PROP_FLOAT, ".sculpt_mask", mesh->totvert));
       break;
     }
     case PBVH_BMESH:
-      info.bm_offset = CustomData_get_offset(&BKE_pbvh_get_bmesh(ss->pbvh)->vdata, CD_PAINT_MASK);
+      info.bm_offset = CustomData_get_offset_named(
+          &BKE_pbvh_get_bmesh(ss->pbvh)->vdata, CD_PROP_FLOAT, ".sculpt_mask");
       break;
     case PBVH_GRIDS:
       break;
@@ -157,7 +160,7 @@ const float *SCULPT_vertex_co_get(const SculptSession *ss, PBVHVertRef vertex)
   switch (BKE_pbvh_type(ss->pbvh)) {
     case PBVH_FACES: {
       if (ss->shapekey_active || ss->deform_modifiers_active) {
-        const float(*positions)[3] = BKE_pbvh_get_vert_positions(ss->pbvh);
+        const Span<float3> positions = BKE_pbvh_get_vert_positions(ss->pbvh);
         return positions[vertex.i];
       }
       return ss->vert_positions[vertex.i];
@@ -246,7 +249,7 @@ const float *SCULPT_vertex_co_for_grab_active_get(SculptSession *ss, PBVHVertRef
   if (BKE_pbvh_type(ss->pbvh) == PBVH_FACES) {
     /* Always grab active shape key if the sculpt happens on shapekey. */
     if (ss->shapekey_active) {
-      const float(*positions)[3] = BKE_pbvh_get_vert_positions(ss->pbvh);
+      const Span<float3> positions = BKE_pbvh_get_vert_positions(ss->pbvh);
       return positions[vertex.i];
     }
 
@@ -292,11 +295,15 @@ void SCULPT_vertex_persistent_normal_get(SculptSession *ss, PBVHVertRef vertex, 
 float SCULPT_vertex_mask_get(SculptSession *ss, PBVHVertRef vertex)
 {
   switch (BKE_pbvh_type(ss->pbvh)) {
-    case PBVH_FACES:
-      return ss->vmask ? ss->vmask[vertex.i] : 0.0f;
+    case PBVH_FACES: {
+      const Mesh *mesh = BKE_pbvh_get_mesh(ss->pbvh);
+      const float *mask = static_cast<const float *>(
+          CustomData_get_layer_named(&mesh->vert_data, CD_PROP_FLOAT, ".sculpt_mask"));
+      return mask ? mask[vertex.i] : 0.0f;
+    }
     case PBVH_BMESH: {
       BMVert *v;
-      int cd_mask = CustomData_get_offset(&ss->bm->vdata, CD_PAINT_MASK);
+      int cd_mask = CustomData_get_offset_named(&ss->bm->vdata, CD_PROP_FLOAT, ".sculpt_mask");
 
       v = (BMVert *)vertex.i;
       return cd_mask != -1 ? BM_ELEM_CD_GET_FLOAT(v, cd_mask) : 0.0f;
@@ -337,19 +344,19 @@ void SCULPT_active_vertex_normal_get(SculptSession *ss, float normal[3])
   SCULPT_vertex_normal_get(ss, SCULPT_active_vertex_get(ss), normal);
 }
 
-float (*SCULPT_mesh_deformed_positions_get(SculptSession *ss))[3]
+MutableSpan<float3> SCULPT_mesh_deformed_positions_get(SculptSession *ss)
 {
   switch (BKE_pbvh_type(ss->pbvh)) {
     case PBVH_FACES:
       if (ss->shapekey_active || ss->deform_modifiers_active) {
         return BKE_pbvh_get_vert_positions(ss->pbvh);
       }
-      return reinterpret_cast<float(*)[3]>(ss->vert_positions.data());
+      return ss->vert_positions;
     case PBVH_BMESH:
     case PBVH_GRIDS:
-      return nullptr;
+      return {};
   }
-  return nullptr;
+  return {};
 }
 
 float *SCULPT_brush_deform_target_vertex_co_get(SculptSession *ss,
@@ -794,8 +801,24 @@ int SCULPT_face_set_next_available_get(SculptSession *ss)
       next_face_set++;
       return next_face_set;
     }
-    case PBVH_BMESH:
-      return 0;
+    case PBVH_BMESH: {
+      const int cd_offset = CustomData_get_offset_named(
+          &ss->bm->pdata, CD_PROP_INT32, ".sculpt_face_set");
+      if (cd_offset == -1) {
+        return 0;
+      }
+
+      int next_face_set = 0;
+      BMIter iter;
+      BMFace *f;
+      BM_ITER_MESH (f, &iter, ss->bm, BM_FACES_OF_MESH) {
+        const int fset = *static_cast<const int *>(POINTER_OFFSET(f->head.data, cd_offset));
+        next_face_set = blender::math::max(next_face_set, fset);
+      }
+
+      next_face_set++;
+      return next_face_set;
+    }
   }
   return 0;
 }
@@ -968,8 +991,7 @@ void SCULPT_vertex_neighbors_get(SculptSession *ss,
 
 static bool sculpt_check_boundary_vertex_in_base_mesh(const SculptSession *ss, const int index)
 {
-  BLI_assert(ss->vertex_info.boundary);
-  return BLI_BITMAP_TEST(ss->vertex_info.boundary, index);
+  return ss->vertex_info.boundary[index];
 }
 
 bool SCULPT_vertex_is_boundary(const SculptSession *ss, const PBVHVertRef vertex)
@@ -1416,39 +1438,6 @@ void SCULPT_orig_vert_data_update(SculptOrigVertData *orig_data, PBVHVertexIter 
   }
 }
 
-void SCULPT_orig_face_data_unode_init(SculptOrigFaceData *data, Object *ob, SculptUndoNode *unode)
-{
-  SculptSession *ss = ob->sculpt;
-  BMesh *bm = ss->bm;
-
-  memset(data, 0, sizeof(*data));
-  data->unode = unode;
-
-  if (bm) {
-    data->bm_log = ss->bm_log;
-  }
-  else {
-    data->face_sets = unode->face_sets.data();
-  }
-}
-
-void SCULPT_orig_face_data_init(SculptOrigFaceData *data,
-                                Object *ob,
-                                PBVHNode *node,
-                                SculptUndoType type)
-{
-  SculptUndoNode *unode;
-  unode = SCULPT_undo_push_node(ob, node, type);
-  SCULPT_orig_face_data_unode_init(data, ob, unode);
-}
-
-void SCULPT_orig_face_data_update(SculptOrigFaceData *orig_data, PBVHFaceIter *iter)
-{
-  if (orig_data->unode->type == SCULPT_UNDO_FACE_SETS) {
-    orig_data->face_set = orig_data->face_sets ? orig_data->face_sets[iter->i] : false;
-  }
-}
-
 static void sculpt_rake_data_update(SculptRakeData *srd, const float co[3])
 {
   float rake_dist = len_v3v3(srd->follow_co, co);
@@ -1505,10 +1494,9 @@ static void paint_mesh_restore_node(Object *ob,
     case SCULPT_UNDO_MASK: {
       switch (BKE_pbvh_type(ss->pbvh)) {
         case PBVH_FACES: {
-          const Span<int> verts = BKE_pbvh_node_get_unique_vert_indices(node);
-          for (const int i : verts.index_range()) {
-            mask_write.layer[verts[i]] = unode->mask[i];
-          }
+          blender::array_utils::scatter(unode->mask.as_span(),
+                                        BKE_pbvh_node_get_unique_vert_indices(node),
+                                        {mask_write.layer, ss->totvert});
           break;
         }
         case PBVH_BMESH: {
@@ -1546,16 +1534,27 @@ static void paint_mesh_restore_node(Object *ob,
       break;
     }
     case SCULPT_UNDO_FACE_SETS: {
-      SculptOrigFaceData orig_face_data;
-      SCULPT_orig_face_data_unode_init(&orig_face_data, ob, unode);
-      PBVHFaceIter fd;
-      BKE_pbvh_face_iter_begin (ss->pbvh, node, fd) {
-        SCULPT_orig_face_data_update(&orig_face_data, &fd);
-        if (fd.face_set) {
-          *fd.face_set = orig_face_data.face_set;
+      const Span<int> face_sets = unode->face_sets;
+      ss->face_sets = BKE_sculpt_face_sets_ensure(ob);
+      switch (BKE_pbvh_type(ss->pbvh)) {
+        case PBVH_FACES:
+        case PBVH_GRIDS: {
+          const Span<int> faces = unode->face_indices;
+          blender::array_utils::scatter(face_sets, faces, {ss->face_sets, ss->faces_num});
+          break;
+        }
+        case PBVH_BMESH: {
+          BMesh *bm = BKE_pbvh_get_bmesh(ss->pbvh);
+          const int offset = CustomData_get_offset_named(
+              &bm->pdata, CD_PROP_INT32, ".sculpt_face_set");
+          int i = 0;
+          for (BMFace *face : BKE_pbvh_bmesh_node_faces(node)) {
+            BM_ELEM_CD_SET_INT(face, offset, face_sets[i]);
+            i++;
+          }
+          break;
         }
       }
-      BKE_pbvh_face_iter_end(fd);
       BKE_pbvh_node_mark_update_face_sets(node);
       break;
     }
@@ -3304,7 +3303,7 @@ static void do_gravity_task(SculptSession *ss,
                             PBVHNode *node)
 {
   PBVHVertexIter vd;
-  float(*proxy)[3] = BKE_pbvh_node_add_proxy(ss->pbvh, node)->co;
+  const MutableSpan<float3> proxy = BKE_pbvh_node_add_proxy(*ss->pbvh, *node).co;
 
   SculptBrushTest test;
   SculptBrushTestFn sculpt_brush_test_sq_fn = SCULPT_brush_test_init_with_falloff_shape(
@@ -3355,7 +3354,7 @@ static void do_gravity(Sculpt *sd, Object *ob, Span<PBVHNode *> nodes, float bst
 /** \name Sculpt Brush Utilities
  * \{ */
 
-void SCULPT_vertcos_to_key(Object *ob, KeyBlock *kb, const float (*vertCos)[3])
+void SCULPT_vertcos_to_key(Object *ob, KeyBlock *kb, const Span<float3> vertCos)
 {
   Mesh *me = (Mesh *)ob->data;
   float(*ofs)[3] = nullptr;
@@ -3384,11 +3383,12 @@ void SCULPT_vertcos_to_key(Object *ob, KeyBlock *kb, const float (*vertCos)[3])
 
   /* Modifying of basis key should update mesh. */
   if (kb == me->key->refkey) {
-    BKE_mesh_vert_coords_apply(me, vertCos);
+    me->vert_positions_for_write().copy_from(vertCos);
+    BKE_mesh_tag_positions_changed(me);
   }
 
   /* Apply new coords on active key block, no need to re-allocate kb->data here! */
-  BKE_keyblock_update_from_vertcos(ob, kb, vertCos);
+  BKE_keyblock_update_from_vertcos(ob, kb, reinterpret_cast<const float(*)[3]>(vertCos.data()));
 }
 
 /* NOTE: we do the topology update before any brush actions to avoid
@@ -3415,7 +3415,7 @@ static void sculpt_topology_update(Sculpt *sd,
 
   /* Free index based vertex info as it will become invalid after modifying the topology during the
    * stroke. */
-  MEM_SAFE_FREE(ss->vertex_info.boundary);
+  ss->vertex_info.boundary.clear();
 
   PBVHTopologyUpdateMode mode = PBVHTopologyUpdateMode(0);
   float location[3];
@@ -3791,7 +3791,7 @@ static void do_brush_action(Sculpt *sd,
 }
 
 /* Flush displacement from deformed PBVH vertex to original mesh. */
-static void sculpt_flush_pbvhvert_deform(const SculptSession &ss,
+static void sculpt_flush_pbvhvert_deform(SculptSession &ss,
                                          const PBVHVertexIter &vd,
                                          MutableSpan<float3> positions)
 {
@@ -3799,11 +3799,11 @@ static void sculpt_flush_pbvhvert_deform(const SculptSession &ss,
   int index = vd.vert_indices[vd.i];
 
   sub_v3_v3v3(disp, vd.co, ss.deform_cos[index]);
-  mul_m3_v3(ss.deform_imats[index], disp);
+  mul_m3_v3(ss.deform_imats[index].ptr(), disp);
   add_v3_v3v3(newco, disp, ss.orig_cos[index]);
 
-  copy_v3_v3(ss.deform_cos[index], vd.co);
-  copy_v3_v3(ss.orig_cos[index], newco);
+  ss.deform_cos[index] = vd.co;
+  ss.orig_cos[index] = newco;
 
   if (!ss.shapekey_active) {
     copy_v3_v3(positions[index], newco);
@@ -3823,9 +3823,7 @@ static void sculpt_combine_proxies_node(Object &object,
         (SCULPT_undo_push_node(&object, &node, SCULPT_UNDO_COORDS)->co.data()));
   }
 
-  int proxy_count;
-  PBVHProxyNode *proxies;
-  BKE_pbvh_node_get_proxies(&node, &proxies, &proxy_count);
+  MutableSpan<PBVHProxyNode> proxies = BKE_pbvh_node_get_proxies(&node);
 
   Mesh &mesh = *static_cast<Mesh *>(object.data);
   MutableSpan<float3> positions = mesh.vert_positions_for_write();
@@ -3846,8 +3844,8 @@ static void sculpt_combine_proxies_node(Object &object,
       copy_v3_v3(val, vd.co);
     }
 
-    for (int p = 0; p < proxy_count; p++) {
-      add_v3_v3(val, proxies[p].co[vd.i]);
+    for (const PBVHProxyNode &proxy_node : proxies) {
+      add_v3_v3(val, proxy_node.co[vd.i]);
     }
 
     SCULPT_clip(&sd, ss, vd.co, val);
@@ -3913,14 +3911,11 @@ static void sculpt_update_keyblock(Object *ob)
 
   /* Key-block update happens after handling deformation caused by modifiers,
    * so ss->orig_cos would be updated with new stroke. */
-  if (ss->orig_cos) {
+  if (!ss->orig_cos.is_empty()) {
     SCULPT_vertcos_to_key(ob, ss->shapekey_active, ss->orig_cos);
   }
   else {
-    const float(*positions)[3] = BKE_pbvh_get_vert_positions(ss->pbvh);
-    if (positions != nullptr) {
-      SCULPT_vertcos_to_key(ob, ss->shapekey_active, positions);
-    }
+    SCULPT_vertcos_to_key(ob, ss->shapekey_active, BKE_pbvh_get_vert_positions(ss->pbvh));
   }
 }
 
@@ -3935,15 +3930,12 @@ void SCULPT_flush_stroke_deform(Sculpt * /*sd*/, Object *ob, bool is_proxy_used)
 
     Mesh *me = (Mesh *)ob->data;
     Vector<PBVHNode *> nodes;
-    float(*vertCos)[3] = nullptr;
+    Array<float3> vertCos;
 
     if (ss->shapekey_active) {
-      vertCos = static_cast<float(*)[3]>(
-          MEM_mallocN(sizeof(*vertCos) * me->totvert, "flushStrokeDeofrm keyVerts"));
-
       /* Mesh could have isolated verts which wouldn't be in BVH, to deal with this we copy old
        * coordinates over new ones and then update coordinates for all vertices from BVH. */
-      memcpy(vertCos, ss->orig_cos, sizeof(*vertCos) * me->totvert);
+      vertCos = ss->orig_cos;
     }
 
     nodes = blender::bke::pbvh::search_gather(ss->pbvh, {});
@@ -3956,7 +3948,7 @@ void SCULPT_flush_stroke_deform(Sculpt * /*sd*/, Object *ob, bool is_proxy_used)
         BKE_pbvh_vertex_iter_begin (ss->pbvh, nodes[i], vd, PBVH_ITER_UNIQUE) {
           sculpt_flush_pbvhvert_deform(*ss, vd, positions);
 
-          if (!vertCos) {
+          if (vertCos.is_empty()) {
             continue;
           }
 
@@ -3967,9 +3959,8 @@ void SCULPT_flush_stroke_deform(Sculpt * /*sd*/, Object *ob, bool is_proxy_used)
       }
     });
 
-    if (vertCos) {
+    if (!vertCos.is_empty()) {
       SCULPT_vertcos_to_key(ob, ss->shapekey_active, vertCos);
-      MEM_freeN(vertCos);
     }
   }
   else if (ss->shapekey_active) {
@@ -5383,11 +5374,11 @@ static void sculpt_restore_mesh(Sculpt *sd, Object *ob)
 
 void SCULPT_update_object_bounding_box(Object *ob)
 {
-  if (ob->runtime.bb) {
+  if (ob->runtime->bb) {
     float bb_min[3], bb_max[3];
 
     BKE_pbvh_bounding_box(ob->sculpt->pbvh, bb_min, bb_max);
-    BKE_boundbox_init_from_minmax(ob->runtime.bb, bb_min, bb_max);
+    BKE_boundbox_init_from_minmax(ob->runtime->bb, bb_min, bb_max);
   }
 }
 
@@ -6112,13 +6103,13 @@ void SCULPT_boundary_info_ensure(Object *object)
 {
   using namespace blender;
   SculptSession *ss = object->sculpt;
-  if (ss->vertex_info.boundary) {
+  if (!ss->vertex_info.boundary.is_empty()) {
     return;
   }
 
   Mesh *base_mesh = BKE_mesh_from_object(object);
 
-  ss->vertex_info.boundary = BLI_BITMAP_NEW(base_mesh->totvert, "Boundary info");
+  ss->vertex_info.boundary.resize(base_mesh->totvert);
   Array<int> adjacent_faces_edge_count(base_mesh->totedge, 0);
   array_utils::count_indices(base_mesh->corner_edges(), adjacent_faces_edge_count);
 
@@ -6126,8 +6117,8 @@ void SCULPT_boundary_info_ensure(Object *object)
   for (const int e : edges.index_range()) {
     if (adjacent_faces_edge_count[e] < 2) {
       const int2 &edge = edges[e];
-      BLI_BITMAP_SET(ss->vertex_info.boundary, edge[0], true);
-      BLI_BITMAP_SET(ss->vertex_info.boundary, edge[1], true);
+      ss->vertex_info.boundary[edge[0]].set();
+      ss->vertex_info.boundary[edge[1]].set();
     }
   }
 }
@@ -6183,7 +6174,6 @@ void SCULPT_fake_neighbors_free(Object *ob)
 }
 
 void SCULPT_automasking_node_begin(Object *ob,
-                                   const SculptSession * /*ss*/,
                                    AutomaskingCache *automasking,
                                    AutomaskingNodeData *automask_data,
                                    PBVHNode *node)
@@ -6193,7 +6183,6 @@ void SCULPT_automasking_node_begin(Object *ob,
     return;
   }
 
-  automask_data->node = node;
   automask_data->have_orig_data = automasking->settings.flags &
                                   (BRUSH_AUTOMASKING_BRUSH_NORMAL | BRUSH_AUTOMASKING_VIEW_NORMAL);
 
@@ -6205,9 +6194,7 @@ void SCULPT_automasking_node_begin(Object *ob,
   }
 }
 
-void SCULPT_automasking_node_update(SculptSession * /*ss*/,
-                                    AutomaskingNodeData *automask_data,
-                                    PBVHVertexIter *vd)
+void SCULPT_automasking_node_update(AutomaskingNodeData *automask_data, PBVHVertexIter *vd)
 {
   if (automask_data->have_orig_data) {
     SCULPT_orig_vert_data_update(&automask_data->orig_data, vd);
@@ -6269,32 +6256,6 @@ void SCULPT_stroke_id_ensure(Object *ob)
         CD_PROP_INT8,
         SCULPT_ATTRIBUTE_NAME(automasking_stroke_id),
         &params);
-  }
-}
-
-int SCULPT_face_set_get(const SculptSession *ss, PBVHFaceRef face)
-{
-  switch (BKE_pbvh_type(ss->pbvh)) {
-    case PBVH_BMESH:
-      return 0;
-    case PBVH_FACES:
-    case PBVH_GRIDS:
-      return ss->face_sets[face.i];
-  }
-
-  BLI_assert_unreachable();
-
-  return 0;
-}
-
-void SCULPT_face_set_set(SculptSession *ss, PBVHFaceRef face, int fset)
-{
-  switch (BKE_pbvh_type(ss->pbvh)) {
-    case PBVH_BMESH:
-      break;
-    case PBVH_FACES:
-    case PBVH_GRIDS:
-      ss->face_sets[face.i] = fset;
   }
 }
 

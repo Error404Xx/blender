@@ -10,7 +10,7 @@
 #include "usd_skel_convert.h"
 
 #include "BKE_attribute.hh"
-#include "BKE_customdata.h"
+#include "BKE_customdata.hh"
 #include "BKE_main.h"
 #include "BKE_material.h"
 #include "BKE_mesh.hh"
@@ -181,6 +181,12 @@ static std::optional<eCustomDataType> convert_usd_type_to_blender(
     map.add_new(pxr::SdfValueTypeNames->TexCoord3fArray, CD_PROP_FLOAT2);
     map.add_new(pxr::SdfValueTypeNames->TexCoord3hArray, CD_PROP_FLOAT2);
     map.add_new(pxr::SdfValueTypeNames->Float3Array, CD_PROP_FLOAT3);
+    map.add_new(pxr::SdfValueTypeNames->Point3fArray, CD_PROP_FLOAT3);
+    map.add_new(pxr::SdfValueTypeNames->Point3dArray, CD_PROP_FLOAT3);
+    map.add_new(pxr::SdfValueTypeNames->Point3hArray, CD_PROP_FLOAT3);
+    map.add_new(pxr::SdfValueTypeNames->Normal3fArray, CD_PROP_FLOAT3);
+    map.add_new(pxr::SdfValueTypeNames->Normal3dArray, CD_PROP_FLOAT3);
+    map.add_new(pxr::SdfValueTypeNames->Normal3hArray, CD_PROP_FLOAT3);
     map.add_new(pxr::SdfValueTypeNames->Vector3fArray, CD_PROP_FLOAT3);
     map.add_new(pxr::SdfValueTypeNames->Vector3hArray, CD_PROP_FLOAT3);
     map.add_new(pxr::SdfValueTypeNames->Vector3dArray, CD_PROP_FLOAT3);
@@ -190,6 +196,8 @@ static std::optional<eCustomDataType> convert_usd_type_to_blender(
     map.add_new(pxr::SdfValueTypeNames->StringArray, CD_PROP_STRING);
     map.add_new(pxr::SdfValueTypeNames->BoolArray, CD_PROP_BOOL);
     map.add_new(pxr::SdfValueTypeNames->QuatfArray, CD_PROP_QUATERNION);
+    map.add_new(pxr::SdfValueTypeNames->QuatdArray, CD_PROP_QUATERNION);
+    map.add_new(pxr::SdfValueTypeNames->QuathArray, CD_PROP_QUATERNION);
     return map;
   }();
 
@@ -462,7 +470,7 @@ void USDMeshReader::read_color_data_primvar(Mesh *mesh,
     const OffsetIndices faces = mesh->faces();
     const Span<int> corner_verts = mesh->corner_verts();
     for (const int i : faces.index_range()) {
-      const IndexRange &face = faces[i];
+      const IndexRange face = faces[i];
       for (int j = 0; j < face.size(); ++j) {
         int loop_index = face[j];
 
@@ -902,6 +910,11 @@ void USDMeshReader::read_custom_data(const ImportSettings *settings,
       continue;
     }
 
+    if (!pv.GetAttr().GetTypeName().IsArray()) {
+      /* Non-array attributes are technically improper USD. */
+      continue;
+    }
+
     const pxr::SdfValueTypeName type = pv.GetTypeName();
     const pxr::TfToken varying_type = pv.GetInterpolation();
     const pxr::TfToken name = pv.StripPrimvarsName(pv.GetPrimvarName());
@@ -911,6 +924,16 @@ void USDMeshReader::read_custom_data(const ImportSettings *settings,
     if (!new_mesh && primvar_varying_map_.find(name) != primvar_varying_map_.end() &&
         !primvar_varying_map_.at(name))
     {
+      continue;
+    }
+
+    if (ELEM(type,
+             pxr::SdfValueTypeNames->StringArray,
+             pxr::SdfValueTypeNames->QuatfArray,
+             pxr::SdfValueTypeNames->QuatdArray,
+             pxr::SdfValueTypeNames->QuathArray))
+    {
+      /* Skip creating known unsupported types, and avoid noisy error prints. */
       continue;
     }
 
